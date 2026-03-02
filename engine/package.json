@@ -1,0 +1,13 @@
+{
+  "name": "engine",
+  "version": "1.0.0",
+  "description": "SMC live engine",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

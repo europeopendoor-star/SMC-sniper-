@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMC Sniper</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #logs { background: #eee; padding: 10px; height: 200px; overflow-y: scroll; margin-top: 20px; }
+        .alert { color: red; font-weight: bold; }
+        .zone { color: blue; }
+        .btn { padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; margin-top: 10px;}
+        .container { display: flex; gap: 20px;}
+        .panel { border: 1px solid #ccc; padding: 15px; flex: 1; }
+    </style>
+</head>
+<body>
+    <h1>SMC Sniper Dashboard</h1>
+
+    <div class="container">
+        <div class="panel">
+            <h3>1. Upload Screenshot</h3>
+            <input type="file" id="screenshot" accept="image/*" />
+            <br/>
+            <button class="btn" id="uploadBtn">Upload Chart</button>
+            <p id="uploadStatus"></p>
+        </div>
+
+        <div class="panel">
+            <h3>2. Live Engine Status</h3>
+            <p><strong>Active Zones:</strong> <span id="activeZones">0</span></p>
+            <p><strong>HTF Bias:</strong> Bullish (mocked)</p>
+        </div>
+
+        <div class="panel">
+            <h3>3. Simulate Market Feed</h3>
+            <button class="btn" id="feedBtn">Send Bullish Candle</button>
+            <button class="btn" id="feedBtnSweep">Send Sweep Candle</button>
+            <button class="btn" id="feedBtnShift">Send LTF Shift Candle</button>
+        </div>
+    </div>
+
+    <h3>Live Alerts & Logs</h3>
+    <div id="logs"></div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:3000');
+        const logs = document.getElementById('logs');
+        const activeZonesEl = document.getElementById('activeZones');
+
+        function addLog(msg, type = 'info') {
+            const p = document.createElement('p');
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            if (type === 'alert') p.className = 'alert';
+            if (type === 'zone') p.className = 'zone';
+            logs.appendChild(p);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        ws.onopen = () => addLog('Connected to Live Engine');
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'ALERT') {
+                addLog(`ALERT: ${data.payload.type} | Dir: ${data.payload.direction} | Price: ${data.payload.price}`, 'alert');
+            } else if (data.type === 'STATE_UPDATE') {
+                activeZonesEl.textContent = data.payload.zones.length;
+                addLog(`State updated. Active zones: ${data.payload.zones.length}`);
+            } else if (data.type === 'CANDLE') {
+                addLog(`New candle processed: close at ${data.payload.close}`);
+            }
+        };
+
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('screenshot');
+            if (!fileInput.files[0]) return alert('Select an image first');
+
+            const formData = new FormData();
+            formData.append('screenshot', fileInput.files[0]);
+
+            document.getElementById('uploadStatus').textContent = 'Uploading...';
+            try {
+                const res = await fetch('http://localhost:3000/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                document.getElementById('uploadStatus').textContent = 'Upload successful!';
+                addLog(`Imported ${data.data.zones.length} zones from screenshot`, 'zone');
+            } catch (e) {
+                document.getElementById('uploadStatus').textContent = 'Upload failed.';
+                console.error(e);
+            }
+        });
+
+        async function sendCandle(candle) {
+            try {
+                await fetch('http://localhost:3000/api/feed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candle })
+                });
+            } catch(e) { console.error(e); }
+        }
+
+        document.getElementById('feedBtn').addEventListener('click', () => {
+            sendCandle({ open: 102, high: 103, low: 101, close: 102.5, timestamp: Date.now() });
+        });
+
+        document.getElementById('feedBtnSweep').addEventListener('click', () => {
+             sendCandle({ open: 102.5, high: 103, low: 99, close: 101, timestamp: Date.now() });
+        });
+
+        document.getElementById('feedBtnShift').addEventListener('click', () => {
+             sendCandle({ open: 101, high: 104, low: 100, close: 103, timestamp: Date.now() });
+        });
+
+    </script>
+</body>
+</html>
